@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大模型安全漏洞扫描平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        .progress {
+            height: 20px;
+            border-radius: 10px;
+        }
+        .result-card {
+            border-left: 4px solid #667eea;
+        }
+        .vulnerability-high {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .vulnerability-medium {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        .vulnerability-low {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="header text-center">
+        <div class="container">
+            <h1>大模型安全漏洞扫描平台</h1>
+            <p class="lead">自动化检测大模型应用的安全漏洞，提供风险评估和修复建议</p>
+        </div>
+    </div>
+
+    <div class="container mt-5">
+        <!-- 扫描配置 -->
+        <div class="card mb-5">
+            <div class="card-body">
+                <h2 class="card-title">扫描配置</h2>
+                <form id="scanForm">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="modelType" class="form-label">模型类型</label>
+                            <select class="form-select" id="modelType" required>
+                                <option value="chatglm">ChatGLM</option>
+                                <option value="qwen">Qwen</option>
+                                <option value="wenxin">文心一言</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="apiKey" class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="apiKey" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="modelUrl" class="form-label">模型URL (可选)</label>
+                            <input type="url" class="form-control" id="modelUrl">
+                        </div>
+                        <div class="col-md-12">
+                            <label for="testCases" class="form-label">测试用例</label>
+                            <select class="form-select" id="testCases">
+                                <option value="all">全部测试用例</option>
+                                <option value="prompt_injection">提示词注入</option>
+                                <option value="function_call_escalation">函数调用越权</option>
+                                <option value="data_leakage">数据泄露</option>
+                                <option value="overfitting">过度拟合</option>
+                                <option value="privilege_escalation">权限提升</option>
+                            </select>
+                        </div>
+                        <div class="col-md-12 text-center">
+                            <button type="submit" class="btn btn-primary btn-lg">开始扫描</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 扫描进度 -->
+        <div class="card mb-5 d-none" id="progressCard">
+            <div class="card-body">
+                <h2 class="card-title">扫描进度</h2>
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <p id="progressText" class="text-center">准备开始扫描...</p>
+            </div>
+        </div>
+
+        <!-- 扫描结果 -->
+        <div class="card mb-5 d-none" id="resultCard">
+            <div class="card-body">
+                <h2 class="card-title">扫描结果</h2>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="card-title">总体风险</h3>
+                                <p class="card-text display-4" id="riskLevel">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="card-title">漏洞数量</h3>
+                                <p class="card-text display-4" id="vulnerabilityCount">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="card-title">检测率</h3>
+                                <p class="card-text display-4" id="detectionRate">0%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 漏洞统计图表 -->
+                <div class="mb-4">
+                    <h3>漏洞类型统计</h3>
+                    <canvas id="vulnerabilityChart" height="200"></canvas>
+                </div>
+
+                <!-- 详细漏洞列表 -->
+                <div class="mb-4">
+                    <h3>详细漏洞信息</h3>
+                    <div id="vulnerabilityList" class="list-group"></div>
+                </div>
+
+                <!-- 修复建议 -->
+                <div class="mb-4">
+                    <h3>修复建议</h3>
+                    <div id="recommendations" class="list-group"></div>
+                </div>
+
+                <!-- 报告导出 -->
+                <div class="text-center mt-4">
+                    <button class="btn btn-primary me-2" id="exportPDF">导出PDF报告</button>
+                    <button class="btn btn-primary" id="exportExcel">导出Excel报告</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const scanForm = document.getElementById('scanForm');
+            const progressCard = document.getElementById('progressCard');
+            const resultCard = document.getElementById('resultCard');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const riskLevel = document.getElementById('riskLevel');
+            const vulnerabilityCount = document.getElementById('vulnerabilityCount');
+            const detectionRate = document.getElementById('detectionRate');
+            const vulnerabilityList = document.getElementById('vulnerabilityList');
+            const recommendations = document.getElementById('recommendations');
+            const exportPDF = document.getElementById('exportPDF');
+            const exportExcel = document.getElementById('exportExcel');
+
+            let vulnerabilityChart = null;
+
+            scanForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                // 显示进度卡片
+                progressCard.classList.remove('d-none');
+                resultCard.classList.add('d-none');
+
+                // 获取表单数据
+                const modelType = document.getElementById('modelType').value;
+                const apiKey = document.getElementById('apiKey').value;
+                const modelUrl = document.getElementById('modelUrl').value;
+                const testCases = document.getElementById('testCases').value;
+
+                try {
+                    // 模拟扫描进度
+                    for (let i = 0; i <= 100; i += 10) {
+                        progressBar.style.width = `${i}%`;
+                        progressBar.setAttribute('aria-valuenow', i);
+                        progressText.textContent = `扫描中... ${i}%`;
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+
+                    // 发送扫描请求
+                    const response = await fetch('http://localhost:8000/api/scan', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: new URLSearchParams({
+                            model_type: modelType,
+                            api_key: apiKey,
+                            model_url: modelUrl || '',
+                            test_cases: testCases
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // 显示结果卡片
+                        progressCard.classList.add('d-none');
+                        resultCard.classList.remove('d-none');
+
+                        // 填充结果数据
+                        const analysis = result.data.analysis;
+                        riskLevel.textContent = analysis.risk_level;
+                        vulnerabilityCount.textContent = analysis.vulnerable_tests;
+                        detectionRate.textContent = `${analysis.detection_rate}%`;
+
+                        // 设置风险等级样式
+                        if (analysis.risk_level === '高风险') {
+                            riskLevel.className = 'card-text display-4 text-danger';
+                        } else if (analysis.risk_level === '中风险') {
+                            riskLevel.className = 'card-text display-4 text-warning';
+                        } else {
+                            riskLevel.className = 'card-text display-4 text-success';
+                        }
+
+                        // 生成漏洞统计图表
+                        generateVulnerabilityChart(analysis.vulnerability_stats);
+
+                        // 填充漏洞列表
+                        fillVulnerabilityList(result.data.scan_results);
+
+                        // 填充修复建议
+                        fillRecommendations(analysis.recommendations);
+                    } else {
+                        alert('扫描失败: ' + result.error);
+                        progressCard.classList.add('d-none');
+                    }
+                } catch (error) {
+                    console.error('扫描错误:', error);
+                    alert('扫描过程中发生错误');
+                    progressCard.classList.add('d-none');
+                }
+            });
+
+            function generateVulnerabilityChart(stats) {
+                const ctx = document.getElementById('vulnerabilityChart').getContext('2d');
+
+                // 销毁旧图表
+                if (vulnerabilityChart) {
+                    vulnerabilityChart.destroy();
+                }
+
+                // 准备数据
+                const labels = Object.keys(stats);
+                const data = Object.values(stats);
+
+                vulnerabilityChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '漏洞数量',
+                            data: data,
+                            backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                            borderColor: 'rgba(102, 126, 234, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function fillVulnerabilityList(results) {
+                vulnerabilityList.innerHTML = '';
+
+                results.forEach(result => {
+                    if (result.is_vulnerable) {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item result-card vulnerability-high';
+                        item.innerHTML = `
+                            <h5 class="mb-1">${result.vulnerability_type}</h5>
+                            <p class="mb-1">测试用例: ${result.test_case_id}</p>
+                            <p class="mb-1">提示词: ${result.prompt}</p>
+                            <p class="mb-1">模型响应: ${result.model_response}</p>
+                            <small>响应时间: ${result.response_time}s</small>
+                        `;
+                        vulnerabilityList.appendChild(item);
+                    }
+                });
+
+                if (vulnerabilityList.children.length === 0) {
+                    vulnerabilityList.innerHTML = '<p class="text-center text-success">未发现漏洞</p>';
+                }
+            }
+
+            function fillRecommendations(recs) {
+                recommendations.innerHTML = '';
+
+                recs.forEach(rec => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item';
+                    item.innerHTML = `
+                        <h5 class="mb-1">${rec.vulnerability} <span class="badge bg-danger">${rec.severity}</span></h5>
+                        <p class="mb-1">${rec.recommendation}</p>
+                    `;
+                    recommendations.appendChild(item);
+                });
+
+                if (recommendations.children.length === 0) {
+                    recommendations.innerHTML = '<p class="text-center text-success">无需修复建议</p>';
+                }
+            }
+
+            // 导出PDF报告
+            exportPDF.addEventListener('click', function() {
+                alert('PDF导出功能开发中...');
+            });
+
+            // 导出Excel报告
+            exportExcel.addEventListener('click', function() {
+                alert('Excel导出功能开发中...');
+            });
+        });
+    </script>
+</body>
+</html>
